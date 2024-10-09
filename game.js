@@ -5,7 +5,7 @@ const ctx = canvas.getContext('2d');
 const player = {
   x: 100,
   y: 100,
-  speed: 2,
+  speed: 0.2, // Initiale Geschwindigkeit
   trail: [],
   isDrawing: true, // Spieler zeichnet immer
 };
@@ -41,10 +41,10 @@ function drawShapes() {
 }
 
 function updatePlayerPosition(direction) {
-  if (direction === 'up') player.y -= gridSize;
-  if (direction === 'down') player.y += gridSize;
-  if (direction === 'left') player.x -= gridSize;
-  if (direction === 'right') player.x += gridSize;
+  if (direction === 'up') player.y -= player.speed * gridSize;
+  if (direction === 'down') player.y += player.speed * gridSize;
+  if (direction === 'left') player.x -= player.speed * gridSize;
+  if (direction === 'right') player.x += player.speed * gridSize;
 
   if (player.isDrawing) {
     player.trail.push({ x: player.x, y: player.y });
@@ -74,11 +74,28 @@ function handleInput(event) {
 
 document.addEventListener('keydown', handleInput);
 
+// Xbox Controller Unterstützung
+window.addEventListener("gamepadconnected", (event) => {
+  console.log("Gamepad connected:", event.gamepad);
+});
+
+function handleGamepadInput() {
+  const gamepads = navigator.getGamepads();
+  if (gamepads[0]) {
+    const gp = gamepads[0];
+    if (gp.axes[1] < -0.5) updatePlayerPosition('up');
+    if (gp.axes[1] > 0.5) updatePlayerPosition('down');
+    if (gp.axes[0] < -0.5) updatePlayerPosition('left');
+    if (gp.axes[0] > 0.5) updatePlayerPosition('right');
+  }
+}
+
 function gameLoop() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawShapes();
   drawTrail();
   drawPlayer();
+  handleGamepadInput();
   requestAnimationFrame(gameLoop);
 }
 
