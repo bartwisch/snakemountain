@@ -8,21 +8,21 @@ let closedShapes = [];
 const player1 = {
   x: 100,
   y: 100,
-  speed: 0.2, // Initiale Geschwindigkeit
+  speed: 0.2, // Gleiche Geschwindigkeit für beide Spieler
   trail: [],
   isDrawing: true, // Spieler zeichnet immer
   color: 'blue',
-  trailColor: 'orange'
+  trailColor: 'lightblue'
 };
 
 const player2 = {
   x: 200,
   y: 200,
-  speed: 0.2, // Initiale Geschwindigkeit
+  speed: 0.2, // Gleiche Geschwindigkeit für beide Spieler
   trail: [],
   isDrawing: true, // Spieler zeichnet immer
   color: 'red',
-  trailColor: 'red'
+  trailColor: 'lightcoral'
 };
 
 function drawPlayer(player) {
@@ -43,25 +43,34 @@ function drawTrail(player) {
 }
 
 function drawShapes() {
-  ctx.fillStyle = 'rgba(0, 255, 0, 0.5)';
   closedShapes.forEach(shape => {
+    ctx.fillStyle = shape.player.color;
     ctx.beginPath();
-    shape.forEach(point => ctx.lineTo(point.x, point.y));
+    shape.points.forEach(point => ctx.lineTo(point.x, point.y));
     ctx.closePath();
     ctx.fill();
   });
 }
 
 function updatePlayerPosition(player, direction) {
-  if (direction === 'up') player.y -= player.speed * gridSize;
-  if (direction === 'down') player.y += player.speed * gridSize;
-  if (direction === 'left') player.x -= player.speed * gridSize;
-  if (direction === 'right') player.x += player.speed * gridSize;
+  let newX = player.x;
+  let newY = player.y;
 
-  if (player.isDrawing) {
-    player.trail.push({ x: player.x, y: player.y });
-    checkForClosedShape(player);
-    player.isDrawing = true;
+  if (direction === 'up') newY -= player.speed * gridSize;
+  if (direction === 'down') newY += player.speed * gridSize;
+  if (direction === 'left') newX -= player.speed * gridSize;
+  if (direction === 'right') newX += player.speed * gridSize;
+
+  // Begrenzung der Spielfläche
+  if (newX >= 0 && newX <= canvas.width - gridSize && newY >= 0 && newY <= canvas.height - gridSize) {
+    player.x = newX;
+    player.y = newY;
+
+    if (player.isDrawing) {
+      player.trail.push({ x: player.x, y: player.y });
+      checkForClosedShape(player);
+      player.isDrawing = true;
+    }
   }
 }
 
@@ -69,7 +78,7 @@ function checkForClosedShape(player) {
   const lastPoint = player.trail[player.trail.length - 1];
   for (let i = 0; i < player.trail.length - 2; i++) {
     if (player.trail[i].x === lastPoint.x && player.trail[i].y === lastPoint.y) {
-      closedShapes.push(player.trail.slice(i));
+      closedShapes.push({ points: player.trail.slice(i), player: player });
       player.trail = [{ x: player.x, y: player.y }];
       return true;
     }
