@@ -7,7 +7,7 @@ const player = {
   y: 100,
   speed: 2,
   trail: [],
-  isDrawing: false,
+  isDrawing: true, // Spieler zeichnet immer
 };
 
 const gridSize = 20;
@@ -49,6 +49,7 @@ function updatePlayerPosition(direction) {
   if (player.isDrawing) {
     player.trail.push({ x: player.x, y: player.y });
     checkForClosedShape();
+    player.isDrawing = true; // Zeichnen sicherstellen
   }
 }
 
@@ -57,11 +58,11 @@ function checkForClosedShape() {
   for (let i = 0; i < player.trail.length - 2; i++) {
     if (player.trail[i].x === lastPoint.x && player.trail[i].y === lastPoint.y) {
       closedShapes.push(player.trail.slice(i));
-      player.trail = [];
-      player.isDrawing = false;
-      break;
+      player.trail = [{ x: player.x, y: player.y }]; // Spieler beginnt eine neue Linie ab der aktuellen Position
+      return true;
     }
   }
+  return false;
 }
 
 function handleInput(event) {
@@ -69,7 +70,6 @@ function handleInput(event) {
   if (event.key === 'ArrowDown') updatePlayerPosition('down');
   if (event.key === 'ArrowLeft') updatePlayerPosition('left');
   if (event.key === 'ArrowRight') updatePlayerPosition('right');
-  if (event.key === ' ') player.isDrawing = !player.isDrawing;
 }
 
 document.addEventListener('keydown', handleInput);
