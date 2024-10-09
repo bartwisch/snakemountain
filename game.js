@@ -18,7 +18,7 @@ const player1 = {
 const player2 = {
   x: 200,
   y: 200,
-  speed: 1, // Initiale Geschwindigkeit
+  speed: 0.2, // Initiale Geschwindigkeit
   trail: [],
   isDrawing: true, // Spieler zeichnet immer
   color: 'red',
