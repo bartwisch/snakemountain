@@ -1,222 +1,383 @@
-// HTML setup
-const canvas = document.createElement('canvas');
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
-document.body.appendChild(canvas);
+// game.js
+
+// Canvas und Kontext initialisieren
+const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// Player setup
-let player1 = {
-  x: canvas.width / 3,
-  y: canvas.height / 2,
-  speed: 3,
-  trail: [],
-  isDrawing: false
+// Spielvariablen
+let gamepads = {};
+let prevButtonStates = {}; // Vorherige Zustände der Gamepad-Tasten
+let gameTime = 60; // Spielzeit in Sekunden
+let startTime; // Spielstartzeit
+let gameOver = false; // Status, ob das Spiel beendet ist
+
+// Spielerobjekte
+let players = [
+    {
+        id: 1,
+        x: canvas.width / 4,
+        y: canvas.height - 20,
+        speed: 5,
+        size: 10,
+        color: 'white',
+        isDrawing: false,
+        path: [],
+        controls: 'gamepad', // Steuerung über Gamepad
+        gamepadIndex: null, // Index des zugewiesenen Gamepads
+        filledArea: 0 // Gesamtfläche, die der Spieler gefüllt hat
+    },
+    {
+        id: 2,
+        x: (canvas.width / 4) * 3,
+        y: canvas.height - 20,
+        speed: 5,
+        size: 10,
+        color: 'green',
+        isDrawing: false,
+        path: [],
+        controls: 'gamepad', // Steuerung über Gamepad
+        gamepadIndex: null, // Index des zugewiesenen Gamepads
+        filledArea: 0 // Gesamtfläche, die der Spieler gefüllt hat
+    }
+];
+
+let enemies = [];
+let lines = [];
+let filledAreas = [];
+
+// Spiel starten
+window.onload = function() {
+    window.addEventListener('gamepadconnected', gamepadHandler);
+    window.addEventListener('gamepaddisconnected', gamepadHandler);
+    initEnemies();
+    startGameTimer();
+    gameOver = false;
+    requestAnimationFrame(gameLoop);
 };
 
-let player2 = {
-  x: (2 * canvas.width) / 3,
-  y: canvas.height / 2,
-  speed: 3,
-  trail: [],
-  isDrawing: false
-};
+// Gamepad-Ereignisfunktion
+function gamepadHandler(event) {
+    const gp = navigator.getGamepads()[event.gamepad.index];
+    if (event.type === 'gamepadconnected') {
+        gamepads[gp.index] = gp;
+        // Vorherige Tasten-Zustände initialisieren
+        prevButtonStates[gp.index] = gp.buttons.map(b => false);
+        console.log('Gamepad verbunden:', gp.id);
 
-let closedAreasPlayer1 = [];
-let closedAreasPlayer2 = [];
-let timer = 60;
-let gameEnded = false;
-
-// Game controllers
-let gamepad1 = null;
-let gamepad2 = null;
-window.addEventListener("gamepadconnected", (e) => {
-  if (!gamepad1) {
-    gamepad1 = navigator.getGamepads()[e.gamepad.index];
-  } else if (!gamepad2) {
-    gamepad2 = navigator.getGamepads()[e.gamepad.index];
-  }
-});
-
-window.addEventListener("gamepaddisconnected", (e) => {
-  if (gamepad1 && gamepad1.index === e.gamepad.index) {
-    gamepad1 = null;
-  } else if (gamepad2 && gamepad2.index === e.gamepad.index) {
-    gamepad2 = null;
-  }
-});
-
-// Timer countdown
-function startTimer() {
-  const timerInterval = setInterval(() => {
-    if (timer > 0) {
-      timer--;
+        // Einem Spieler das Gamepad zuweisen, der noch keins hat
+        for (let player of players) {
+            if (player.gamepadIndex === null) {
+                player.gamepadIndex = gp.index;
+                console.log('Spieler', player.id, 'wurde Gamepad', gp.index, 'zugewiesen.');
+                break;
+            }
+        }
     } else {
-      clearInterval(timerInterval);
-      gameEnded = true;
-      calculateFilledPercentage();
+        delete gamepads[gp.index];
+        delete prevButtonStates[gp.index];
+        console.log('Gamepad getrennt:', gp.id);
+
+        // Entferne die Gamepad-Zuordnung von Spielern, deren Gamepad getrennt wurde
+        for (let player of players) {
+            if (player.gamepadIndex === gp.index) {
+                player.gamepadIndex = null;
+                console.log('Spieler', player.id, 'hat sein Gamepad verloren.');
+            }
+        }
     }
-  }, 1000);
 }
 
-function calculateFilledPercentage() {
-  let filledPixelsPlayer1 = 0;
-  let filledPixelsPlayer2 = 0;
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-
-  for (let i = 0; i < imageData.length; i += 4) {
-    if (imageData[i] === 0 && imageData[i + 1] === 128 && imageData[i + 2] === 0 && imageData[i + 3] === 255) {
-      filledPixelsPlayer1++;
-    } else if (imageData[i] === 255 && imageData[i + 1] === 0 && imageData[i + 2] === 0 && imageData[i + 3] === 255) {
-      filledPixelsPlayer2++;
-    }
-  }
-
-  const totalPixels = canvas.width * canvas.height;
-  const filledPercentagePlayer1 = ((filledPixelsPlayer1 / totalPixels) * 100).toFixed(2);
-  const filledPercentagePlayer2 = ((filledPixelsPlayer2 / totalPixels) * 100).toFixed(2);
-
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = 'white';
-  ctx.font = '48px Arial';
-  ctx.fillText(`Player 1 (Green): ${filledPercentagePlayer1}%`, canvas.width / 4 - 150, canvas.height / 2 - 30);
-  ctx.fillText(`Player 2 (Red): ${filledPercentagePlayer2}%`, (3 * canvas.width) / 4 - 150, canvas.height / 2 - 30);
-
-  if (filledPercentagePlayer1 > filledPercentagePlayer2) {
-    ctx.fillText('Player 1 Wins!', canvas.width / 2 - 150, canvas.height / 2 + 60);
-  } else if (filledPercentagePlayer2 > filledPercentagePlayer1) {
-    ctx.fillText('Player 2 Wins!', canvas.width / 2 - 150, canvas.height / 2 + 60);
-  } else {
-    ctx.fillText('Its a Tie!', canvas.width / 2 - 150, canvas.height / 2 + 60);
-  }
+// Spiel-Timer starten
+function startGameTimer() {
+    startTime = Date.now();
 }
 
-// Game loop
+// Gewinner bestimmen
+function determineWinner() {
+    let totalCanvasArea = canvas.width * canvas.height;
+    let player1Percent = (players[0].filledArea / totalCanvasArea) * 100;
+    let player2Percent = (players[1].filledArea / totalCanvasArea) * 100;
+
+    if (player1Percent > player2Percent) {
+        alert('Zeit abgelaufen! Spieler 1 hat gewonnen mit ' + player1Percent.toFixed(2) + '%!');
+    } else if (player2Percent > player1Percent) {
+        alert('Zeit abgelaufen! Spieler 2 hat gewonnen mit ' + player2Percent.toFixed(2) + '%!');
+    } else {
+        alert('Zeit abgelaufen! Unentschieden mit jeweils ' + player1Percent.toFixed(2) + '%!');
+    }
+    resetGame();
+}
+
+// Spielschleife
+function gameLoop() {
+    update();
+    render();
+
+    // Spielzeit überprüfen
+    if (!gameOver) {
+        let elapsed = (Date.now() - startTime) / 1000;
+        if (elapsed >= gameTime) {
+            gameOver = true;
+            determineWinner();
+        }
+    }
+
+    // Nächsten Frame anfordern
+    requestAnimationFrame(gameLoop);
+}
+
+// Aktualisiere Spielzustand
 function update() {
-  if (gameEnded) return;
-
-  if (gamepad1) {
-    gamepad1 = navigator.getGamepads()[gamepad1.index];
-    const leftStickX1 = gamepad1.axes[0] || 0;
-    const leftStickY1 = gamepad1.axes[1] || 0;
-
-    // Update player 1 position
-    if (Math.abs(leftStickX1) > 0.2) player1.x += leftStickX1 * player1.speed;
-    if (Math.abs(leftStickY1) > 0.2) player1.y += leftStickY1 * player1.speed;
-
-    // Ensure player 1 doesn't go out of bounds
-    player1.x = Math.max(0, Math.min(canvas.width - 5, player1.x));
-    player1.y = Math.max(0, Math.min(canvas.height - 5, player1.y));
-
-    // Add to player 1 trail when drawing
-    if (gamepad1.buttons[0] && gamepad1.buttons[0].pressed) {
-      if (!player1.isDrawing) player1.trail = [];
-      player1.isDrawing = true;
-      player1.trail.push({ x: player1.x, y: player1.y });
-    } else if (player1.isDrawing) {
-      player1.isDrawing = false;
-      if (player1.trail.length > 1) {
-        closedAreasPlayer1.push(player1.trail);
-      }
+    if (!gameOver) {
+        handleInput();
+        moveEnemies();
+        checkCollisions();
+        // Weitere Spielaktualisierungen hier hinzufügen
     }
-  }
-
-  if (gamepad2) {
-    gamepad2 = navigator.getGamepads()[gamepad2.index];
-    const leftStickX2 = gamepad2.axes[0] || 0;
-    const leftStickY2 = gamepad2.axes[1] || 0;
-
-    // Update player 2 position
-    if (Math.abs(leftStickX2) > 0.2) player2.x += leftStickX2 * player2.speed;
-    if (Math.abs(leftStickY2) > 0.2) player2.y += leftStickY2 * player2.speed;
-
-    // Ensure player 2 doesn't go out of bounds
-    player2.x = Math.max(0, Math.min(canvas.width - 5, player2.x));
-    player2.y = Math.max(0, Math.min(canvas.height - 5, player2.y));
-
-    // Add to player 2 trail when drawing
-    if (gamepad2.buttons[0] && gamepad2.buttons[0].pressed) {
-      if (!player2.isDrawing) player2.trail = [];
-      player2.isDrawing = true;
-      player2.trail.push({ x: player2.x, y: player2.y });
-    } else if (player2.isDrawing) {
-      player2.isDrawing = false;
-      if (player2.trail.length > 1) {
-        closedAreasPlayer2.push(player2.trail);
-      }
-    }
-  }
-
-  draw();
-  requestAnimationFrame(update);
 }
 
-// Draw the game
-function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+// Eingaben verarbeiten
+function handleInput() {
+    for (let player of players) {
+        if (player.controls === 'gamepad' && player.gamepadIndex !== null) {
+            let moveX = 0;
+            let moveY = 0;
 
-  // Draw timer
-  ctx.fillStyle = 'white';
-  ctx.font = '24px Arial';
-  ctx.fillText(`Time: ${timer}s`, 20, 30);
+            const gp = navigator.getGamepads()[player.gamepadIndex];
+            if (gp) {
+                // Analog-Stick-Achsen
+                const xAxis = gp.axes[0];
+                const yAxis = gp.axes[1];
+                moveX += xAxis * player.speed;
+                moveY += yAxis * player.speed;
 
-  // Draw closed areas for player 1
-  ctx.fillStyle = 'green'; // Player 1 color
-  for (const area of closedAreasPlayer1) {
-    ctx.beginPath();
-    for (let i = 0; i < area.length; i++) {
-      if (i === 0) ctx.moveTo(area[i].x, area[i].y);
-      else ctx.lineTo(area[i].x, area[i].y);
+                // Tasten A (0) und B (1) zum Starten/Stoppen des Zeichnens
+                for (let i of [0, 1]) {
+                    const buttonPressed = gp.buttons[i].pressed;
+                    const prevButtonPressed = prevButtonStates[gp.index][i];
+
+                    if (buttonPressed && !prevButtonPressed) {
+                        // Taste wurde gerade gedrückt
+                        player.isDrawing = !player.isDrawing;
+                        if (player.isDrawing) {
+                            player.path = [{ x: player.x, y: player.y }];
+                        } else {
+                            completePath(player);
+                        }
+                    }
+                    // Vorherigen Tasten-Zustand aktualisieren
+                    prevButtonStates[gp.index][i] = buttonPressed;
+                }
+
+                player.x += moveX;
+                player.y += moveY;
+
+                // Begrenzung innerhalb des Canvas
+                player.x = Math.max(0, Math.min(canvas.width - player.size, player.x));
+                player.y = Math.max(0, Math.min(canvas.height - player.size, player.y));
+
+                // Pfad verfolgen, wenn Zeichnen aktiv ist
+                if (player.isDrawing) {
+                    player.path.push({ x: player.x, y: player.y });
+                }
+            }
+        }
     }
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  // Draw closed areas for player 2
-  ctx.fillStyle = 'red'; // Player 2 color
-  for (const area of closedAreasPlayer2) {
-    ctx.beginPath();
-    for (let i = 0; i < area.length; i++) {
-      if (i === 0) ctx.moveTo(area[i].x, area[i].y);
-      else ctx.lineTo(area[i].x, area[i].y);
-    }
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  // Draw player 1 trail
-  if (player1.isDrawing && player1.trail.length > 0) {
-    ctx.strokeStyle = 'lightgreen'; // Same color as player 1, but brighter
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    for (let i = 0; i < player1.trail.length; i++) {
-      if (i === 0) ctx.moveTo(player1.trail[i].x, player1.trail[i].y);
-      else ctx.lineTo(player1.trail[i].x, player1.trail[i].y);
-    }
-    ctx.stroke();
-  }
-
-  // Draw player 2 trail
-  if (player2.isDrawing && player2.trail.length > 0) {
-    ctx.strokeStyle = 'pink'; // Same color as player 2, but brighter
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    for (let i = 0; i < player2.trail.length; i++) {
-      if (i === 0) ctx.moveTo(player2.trail[i].x, player2.trail[i].y);
-      else ctx.lineTo(player2.trail[i].x, player2.trail[i].y);
-    }
-    ctx.stroke();
-  }
-
-  // Draw player 1
-  ctx.fillStyle = 'green';
-  ctx.fillRect(player1.x - 5, player1.y - 5, 10, 10);
-
-  // Draw player 2
-  ctx.fillStyle = 'red';
-  ctx.fillRect(player2.x - 5, player2.y - 5, 10, 10);
 }
 
-// Start game loop and timer
-startTimer();
-update();
+// Feinde initialisieren
+function initEnemies() {
+    // Beispielhaft zwei Feinde hinzufügen
+    enemies.push({
+        x: 100,
+        y: 100,
+        speedX: 2,
+        speedY: 2,
+        size: 10,
+        color: 'red'
+    });
+    enemies.push({
+        x: 200,
+        y: 200,
+        speedX: -2,
+        speedY: -2,
+        size: 10,
+        color: 'red'
+    });
+}
+
+// Feinde bewegen
+function moveEnemies() {
+    for (let enemy of enemies) {
+        enemy.x += enemy.speedX;
+        enemy.y += enemy.speedY;
+
+        // An Wänden abprallen
+        if (enemy.x <= 0 || enemy.x >= canvas.width - enemy.size) {
+            enemy.speedX *= -1;
+        }
+        if (enemy.y <= 0 || enemy.y >= canvas.height - enemy.size) {
+            enemy.speedY *= -1;
+        }
+    }
+}
+
+// Kollisionen überprüfen
+function checkCollisions() {
+    for (let player of players) {
+        for (let enemy of enemies) {
+            // Kollision mit Spieler
+            if (isColliding(player, enemy)) {
+                // Spiel endet oder Leben verlieren
+                alert('Spieler ' + player.id + ' wurde getroffen!');
+                resetGame();
+                return;
+            }
+
+            // Kollision mit dem Pfad
+            if (player.isDrawing) {
+                for (let point of player.path) {
+                    if (Math.hypot(enemy.x - point.x, enemy.y - point.y) < enemy.size) {
+                        alert('Der Pfad von Spieler ' + player.id + ' wurde getroffen!');
+                        resetGame();
+                        return;
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Pfad abschließen und Bereich füllen
+function completePath(player) {
+    if (player.path.length > 2) {
+        let area = calculatePolygonArea(player.path);
+        if (area > 0) {
+            // Bereich füllen
+            filledAreas.push({
+                points: [...player.path],
+                color: player.color,
+                area: area,
+                playerId: player.id
+            });
+
+            // Gefüllte Fläche zum Spieler hinzufügen
+            player.filledArea += area;
+        }
+    }
+    player.path = [];
+}
+
+// Fläche eines Polygons berechnen (Shoelace-Formel)
+function calculatePolygonArea(points) {
+    let area = 0;
+    let n = points.length;
+    for (let i = 0; i < n; i++) {
+        let j = (i + 1) % n;
+        area += points[i].x * points[j].y;
+        area -= points[j].x * points[i].y;
+    }
+    return Math.abs(area / 2);
+}
+
+// Spiel zurücksetzen
+function resetGame() {
+    // Spielerpositionen und gefüllte Flächen zurücksetzen
+    for (let player of players) {
+        player.x = player.id === 1 ? canvas.width / 4 : (canvas.width / 4) * 3;
+        player.y = canvas.height - 20;
+        player.isDrawing = false;
+        player.path = [];
+        player.filledArea = 0; // Gefüllte Fläche zurücksetzen
+    }
+
+    enemies = [];
+    lines = [];
+    filledAreas = [];
+
+    // Spiel neu starten
+    initEnemies();
+    startGameTimer();
+    gameOver = false;
+}
+
+// Kollisionserkennung
+function isColliding(a, b) {
+    return (
+        a.x < b.x + b.size &&
+        a.x + a.size > b.x &&
+        a.y < b.y + b.size &&
+        a.y + a.size > b.y
+    );
+}
+
+// Spielfeld zeichnen
+function render() {
+    // Canvas leeren
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Gefüllte Bereiche zeichnen
+    for (let area of filledAreas) {
+        ctx.fillStyle = area.color === 'white' ? 'rgba(0, 0, 255, 0.5)' : 'rgba(128, 0, 128, 0.5)';
+        ctx.beginPath();
+        ctx.moveTo(area.points[0].x, area.points[0].y);
+        for (let point of area.points) {
+            ctx.lineTo(point.x, point.y);
+        }
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    // Gezeichnete Linien zeichnen
+    ctx.lineWidth = 2;
+    for (let line of lines) {
+        ctx.strokeStyle = line.color === 'white' ? 'yellow' : 'lightgreen';
+        ctx.beginPath();
+        ctx.moveTo(line.points[0].x, line.points[0].y);
+        for (let point of line.points) {
+            ctx.lineTo(point.x, point.y);
+        }
+        ctx.stroke();
+    }
+
+    // Aktuelle Pfade der Spieler zeichnen
+    for (let player of players) {
+        if (player.isDrawing && player.path.length > 0) {
+            ctx.strokeStyle = player.color;
+            ctx.beginPath();
+            ctx.moveTo(player.path[0].x, player.path[0].y);
+            for (let point of player.path) {
+                ctx.lineTo(point.x, point.y);
+            }
+            ctx.stroke();
+        }
+    }
+
+    // Spieler zeichnen
+    for (let player of players) {
+        ctx.fillStyle = player.color;
+        ctx.fillRect(player.x, player.y, player.size, player.size);
+    }
+
+    // Feinde zeichnen
+    for (let enemy of enemies) {
+        ctx.fillStyle = enemy.color;
+        ctx.fillRect(enemy.x, enemy.y, enemy.size, enemy.size);
+    }
+
+    // Punktestände anzeigen
+    let totalCanvasArea = canvas.width * canvas.height;
+    ctx.fillStyle = 'white';
+    ctx.font = '20px Arial';
+
+    let player1Percent = (players[0].filledArea / totalCanvasArea) * 100;
+    let player2Percent = (players[1].filledArea / totalCanvasArea) * 100;
+
+    ctx.fillText('Spieler 1: ' + player1Percent.toFixed(2) + '%', 10, 20);
+    ctx.fillText('Spieler 2: ' + player2Percent.toFixed(2) + '%', 10, 50);
+
+    // Verbleibende Zeit anzeigen
+    let elapsed = (Date.now() - startTime) / 1000;
+    let remainingTime = Math.max(0, Math.ceil(gameTime - elapsed));
+    ctx.fillText('Zeit: ' + remainingTime + 's', canvas.width - 100, 20);
+}
