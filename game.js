@@ -60,20 +60,35 @@ function startTimer() {
 }
 
 function calculateFilledPercentage() {
-  let filledPixels = 0;
+  let filledPixelsPlayer1 = 0;
+  let filledPixelsPlayer2 = 0;
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
 
-  for (let i = 3; i < imageData.length; i += 4) {
-    if (imageData[i] === 255) {
-      filledPixels++;
+  for (let i = 0; i < imageData.length; i += 4) {
+    if (imageData[i] === 0 && imageData[i + 1] === 128 && imageData[i + 2] === 0 && imageData[i + 3] === 255) {
+      filledPixelsPlayer1++;
+    } else if (imageData[i] === 255 && imageData[i + 1] === 0 && imageData[i + 2] === 0 && imageData[i + 3] === 255) {
+      filledPixelsPlayer2++;
     }
   }
 
-  const filledPercentage = ((filledPixels / (canvas.width * canvas.height)) * 100).toFixed(2);
+  const totalPixels = canvas.width * canvas.height;
+  const filledPercentagePlayer1 = ((filledPixelsPlayer1 / totalPixels) * 100).toFixed(2);
+  const filledPercentagePlayer2 = ((filledPixelsPlayer2 / totalPixels) * 100).toFixed(2);
+
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = 'white';
   ctx.font = '48px Arial';
-  ctx.fillText(`Filled: ${filledPercentage}%`, canvas.width / 2 - 150, canvas.height / 2);
+  ctx.fillText(`Player 1 (Green): ${filledPercentagePlayer1}%`, canvas.width / 4 - 150, canvas.height / 2 - 30);
+  ctx.fillText(`Player 2 (Red): ${filledPercentagePlayer2}%`, (3 * canvas.width) / 4 - 150, canvas.height / 2 - 30);
+
+  if (filledPercentagePlayer1 > filledPercentagePlayer2) {
+    ctx.fillText('Player 1 Wins!', canvas.width / 2 - 150, canvas.height / 2 + 60);
+  } else if (filledPercentagePlayer2 > filledPercentagePlayer1) {
+    ctx.fillText('Player 2 Wins!', canvas.width / 2 - 150, canvas.height / 2 + 60);
+  } else {
+    ctx.fillText('Its a Tie!', canvas.width / 2 - 150, canvas.height / 2 + 60);
+  }
 }
 
 // Game loop
