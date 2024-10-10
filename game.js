@@ -15,6 +15,8 @@ let player = {
 };
 
 let closedAreas = [];
+let timer = 6;
+let gameEnded = false;
 
 // Game controller
 let gamepad = null;
@@ -26,8 +28,40 @@ window.addEventListener("gamepaddisconnected", () => {
   gamepad = null;
 });
 
+// Timer countdown
+function startTimer() {
+  const timerInterval = setInterval(() => {
+    if (timer > 0) {
+      timer--;
+    } else {
+      clearInterval(timerInterval);
+      gameEnded = true;
+      calculateFilledPercentage();
+    }
+  }, 1000);
+}
+
+function calculateFilledPercentage() {
+  let filledPixels = 0;
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+
+  for (let i = 3; i < imageData.length; i += 4) {
+    if (imageData[i] === 255) {
+      filledPixels++;
+    }
+  }
+
+  const filledPercentage = ((filledPixels / (canvas.width * canvas.height)) * 100).toFixed(2);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = 'white';
+  ctx.font = '48px Arial';
+  ctx.fillText(`Filled: ${filledPercentage}%`, canvas.width / 2 - 150, canvas.height / 2);
+}
+
 // Game loop
 function update() {
+  if (gameEnded) return;
+
   if (gamepad) {
     gamepad = navigator.getGamepads()[gamepad.index];
     const leftStickX = gamepad.axes[0] || 0;
@@ -62,8 +96,13 @@ function update() {
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+  // Draw timer
+  ctx.fillStyle = 'white';
+  ctx.font = '24px Arial';
+  ctx.fillText(`Time: ${timer}s`, 20, 30);
+
   // Draw closed areas
-  ctx.fillStyle = 'rgba(0, 150, 0, 1)'; // 0% transparency
+  ctx.fillStyle = 'rgba(0, 150, 255, 1)'; // 0% transparency
   for (const area of closedAreas) {
     ctx.beginPath();
     for (let i = 0; i < area.length; i++) {
@@ -91,5 +130,6 @@ function draw() {
   ctx.fillRect(player.x - 5, player.y - 5, 10, 10);
 }
 
-// Start game loop
+// Start game loop and timer
+startTimer();
 update();
